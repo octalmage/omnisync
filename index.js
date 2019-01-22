@@ -11,29 +11,34 @@ const buildURL = path => `https://sync1.omnigroup.com/${process.env.OF_USERNAME}
 
 console.log("Downloading database!");
 request(`https://sync1.omnigroup.com/${process.env.OF_USERNAME}/OmniFocus.ofocus/`)
-.then(({ body }) => {
-    const $ = cheerio.load(body);
-    // Search for a inside of table (yup it's backwards).
-    return $('a', 'table > tbody').map(function(i, elem) {
-        const link = $(elem).attr('href');
-        if (link.indexOf('.zip') !== -1) {
-            const fullLink = buildURL(link);
-            console.log(`Downloading: ${fullLink}`);
-            return { path: link, p: request(fullLink) };
-        }
+    .then(({
+        body
+    }) => {
+        console.log('Done! Parsing and fetching zips...');
 
-      });
-})
-.then((files) => {
-    files.forEach(({ path, p }) => {
-        p.then((result) => {
-            fs.writeFile(`.ofocus/${path}`, result);
-        });
+        const $ = cheerio.load(body);
+        // Search for a inside of table (yup it's backwards).
+        return $('a', 'table > tbody').map((i, elem) => {
+                const link = $(elem).attr('href');
+                // Add Lazy method for requesting data to be called later.
+
+                return () => new Promise(resolve => {
+                    console.log(`Downloading ${link}...`);
+                    request(buildURL(link)).then(result => {
+                        fs.writeFile(`.ofocus/${link}`, result, resolve);
+                    }).catch(err => console.log);
+                });
+            })
+            .reduce((promiseChain, currentTask) => {
+                console.log(promiseChain);
+                return promiseChain.then(currentTask)
+            }, Promise.resolve())
+            .catch(err => console.log)
+            .then(() => {
+                console.log("All done!");
+            });
+
     });
-    console.log("All done!");
-})
-
-
 
 
 // const directoryList = async () => {
