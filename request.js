@@ -1,7 +1,7 @@
 const Curl = require('node-libcurl').Curl;
 
 
-module.exports = (url) => new Promise((resolve, reject) => {
+module.exports = (url, username, password) => new Promise((resolve, reject) => {
     const ch = new Curl();
 
     ch.setOpt('URL', url);
@@ -13,8 +13,8 @@ module.exports = (url) => new Promise((resolve, reject) => {
     // Uncomment to show more debug information.
     //curl.setOpt( Curl.option.VERBOSE, true );
     //keep in mind that if you use an invalid option, a TypeError exception will be thrown
-    ch.setOpt(Curl.option.USERNAME, process.env.OF_USERNAME);
-    ch.setOpt(Curl.option.PASSWORD, process.env.OF_PASSWORD);
+    ch.setOpt(Curl.option.USERNAME, username);
+    ch.setOpt(Curl.option.PASSWORD, password);
 
 
     ch.on('end', function (statusCode, body, headers) {
