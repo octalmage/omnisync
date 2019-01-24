@@ -24,6 +24,7 @@ module.exports = (url, username, password) => new Promise((resolve, reject) => {
         //     console.log('The file has been saved!');
         //     this.close();
         // });
+        this.close();
         return resolve({ statusCode, body, headers, url });
     });
 
@@ -37,5 +38,5 @@ module.exports = (url, username, password) => new Promise((resolve, reject) => {
     ch.perform();
 
 
-    return
+    return;
 });
