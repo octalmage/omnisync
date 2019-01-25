@@ -34,8 +34,10 @@ module.exports = {
 
     return;
   }),
+
   download: (url, username, password, destination) => new Promise((resolve, reject) => {
   const ch = new Curl();
+  const fileOut = fs.openSync(destination, 'w+');
 
   ch.setOpt('URL', url);
 
@@ -50,12 +52,12 @@ module.exports = {
   ch.setOpt(Curl.option.PASSWORD, password);
 
   ch.setOpt(Curl.option.WRITEFUNCTION, (buff, nmemb, size) => {
-    fileOut = fs.openSync(destination, 'w+');
-    return fs.writeSync(fileOut, buff, 0, nmemb * size);
+    fs.writeSync(fileOut, buff, 0, nmemb * size);
   });
 
   ch.on('end', (statusCode, body, headers) => {
       ch.close();
+      fs.closeSync(fileOut);
       return resolve({ statusCode, body, headers, url });
   });
 
@@ -63,6 +65,7 @@ module.exports = {
       console.error('Err: ', err);
       console.error('Code: ', curlErrCode);
       ch.close();
+      fs.closeSync(fileOut);
       return reject(err, curlErrCode);
   });
 

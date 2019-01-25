@@ -15,7 +15,7 @@ const pkg = require('./package.json');
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
 
-const fileWhitelist = ['.zip', '.capability', 'encrypted', '.client', 'data/'];
+const fileWhitelist = [/.zip$/, /.capability/, /encrypted/, /.client$/, /data\//];
 
 const downloadDirectoryRecursively = (path, username, password) => {
     const buildURL = (p) => `https://sync1.omnigroup.com/${username}/OmniFocus.ofocus/${p ? p : ''}`;
@@ -36,7 +36,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
                 let shouldDownload = false;
                 let isDirectory = false;
                 for (x in fileWhitelist) {
-                    if (link.indexOf(fileWhitelist[x]) !== -1) {
+                    if (fileWhitelist[x].test(link)) {
                         shouldDownload = true;
                         continue;
                     }
