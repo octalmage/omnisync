@@ -7,7 +7,7 @@ const Email = require('email-templates');
 const cheerio = require('cheerio');
 const glob = require('glob');
 const parseString = require('xml2js').parseString;
-const request = require('./request');
+const { get, download } = require('./request');
 const Configstore = require('configstore');
 const mkdirp = require('mkdirp');
 const pkg = require('./package.json');
@@ -20,7 +20,7 @@ const fileWhitelist = ['.zip', '.capability', 'encrypted', '.client', 'data/'];
 const downloadDirectoryRecursively = (path, username, password) => {
     const buildURL = (p) => `https://sync1.omnigroup.com/${username}/OmniFocus.ofocus/${p ? p : ''}`;
 
-    return request(buildURL(path), username, password)
+    return get(buildURL(path), username, password)
         .then(({
             body
         }) => {
@@ -32,7 +32,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
             const tasks = [asyncMkdirp('OmniFocus.ofocus')];
             $('a', 'table').each((i, elem) => {
                 const link = $(elem).attr('href');
-                
+
                 let shouldDownload = false;
                 let isDirectory = false;
                 for (x in fileWhitelist) {
@@ -44,7 +44,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
                 if (shouldDownload) {
                     // Add Lazy method for requesting data to be called later.
-                    // TODO: Need to download the "data/" sub-directory. 
+                    // TODO: Need to download the "data/" sub-directory.
                     // TODO: Need to exclude html files, they aren't encrypted.
                     if (link[link.length - 1] === '/') {
                         tasks.push(asyncMkdirp(`OmniFocus.ofocus/${link}`));
@@ -52,9 +52,9 @@ const downloadDirectoryRecursively = (path, username, password) => {
                     } else {
                         const task = new Promise(resolve => {
                             console.log(`Downloading ${path + link}...`);
-                            request(buildURL(link), username, password).then(({ body }) => {
-                                fs.writeFile(`OmniFocus.ofocus/${path + link}`, body, "binary", resolve);
-                            }).catch(err => console.log);
+                            download(buildURL(link), username, password, `OmniFocus.ofocus/${path + link}`)
+                              .then(resolve)
+                              .catch(err => console.log);
                         });
 
                         tasks.push(task);
