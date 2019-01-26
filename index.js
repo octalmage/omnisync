@@ -11,6 +11,9 @@ const { get, download } = require('./request');
 const Configstore = require('configstore');
 const mkdirp = require('mkdirp');
 const pkg = require('./package.json');
+const { PythonShell } = require('python-shell')
+const exec = require('child_process').exec;
+
 
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
@@ -43,9 +46,6 @@ const downloadDirectoryRecursively = (path, username, password) => {
                 }
 
                 if (shouldDownload) {
-                    // Add Lazy method for requesting data to be called later.
-                    // TODO: Need to download the "data/" sub-directory.
-                    // TODO: Need to exclude html files, they aren't encrypted.
                     if (link[link.length - 1] === '/') {
                         tasks.push(asyncMkdirp(`OmniFocus.ofocus/${link}`));
                         tasks.push(downloadDirectoryRecursively(link, username, password));
@@ -68,24 +68,42 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
 console.log("Downloading database...");
 downloadDirectoryRecursively('', users[0].username, users[0].password)
-    .catch(err => console.log)
+// Promise.resolve()
+    .then(() => {
+        const outPath = `${Date.now()}.OmniFocus.ofocus`;
+        // return '1548392924284.OmniFocus.ofocus';
+        return decryptOmniFocusDatabase('OmniFocus.ofocus', outPath, users[0].password)
+        .then(() => outPath);
+    })
+    .then((outPath) => {
+        // return outPath;
+        return unzipRecursivelyInPlace(outPath)
+        .then((output) => console.log(output))
+        .then(() => outPath);
+    })
+    .then((outPath) => mergeFiles(outPath))
     .then(() => {
         console.log("All done!");
-    });
+    })
+    .catch(console.err)
 
 
-const mergeFiles = () => {
-    glob("output/**/*.xml", {}, (er, files) => {
+const mergeFiles = (path) => {
+    const handler = (resolve, reject) => glob(`${path}/**/*.xml`, {}, (er, files) => {
         const tasks = files.map(file => {
-            return new Promise(resolve => {
+            return new Promise((s, f) => {
                 fs.readFile(file, (err, data) => {
-                    if (err) return reject(err);
-                    return resolve(data.toString());
+                    if (err) return f(err);
+                    return s(data.toString());
                 });
             });
+
         });
         return Promise.all(tasks)
             .then(results => {
+                if (typeof results[0] === 'undefined') {
+                    return console.error("Error reading xml files.");
+                }
                 const tasks = [];
                 const contexts = [];
                 const relations = [];
@@ -93,6 +111,7 @@ const mergeFiles = () => {
                     parseString(xml, (err, result) => {
                         if (err || !result) return;
                         // Grab each task.
+                        // console.log(result);
                         tasks.push(result.omnifocus.task);
                         // Grab tags.
                         contexts.push(result.omnifocus.context);
@@ -129,18 +148,19 @@ const mergeFiles = () => {
 
                 // Remove duplicates.
                 // TODO: These aren't duplicates, they're transactions. So we might need to make this logic smarter.
-                filteredRelations = filteredRelations.filter((relation, index, self) =>
-                    index === self.findIndex((r) => (
-                        r.$.id === relation.$.id
-                    ))
-                );
+        
+                // filteredRelations = filteredRelations.filter((relation, index, self) =>
+                //     index === self.findIndex((r) => (
+                //         r.$.id === relation.$.id
+                //     ))
+                // );
 
 
                 // Now find the tasks referenced in the relations.
                 let filteredTasks = flattenDeep(tasks)
                     .filter(c => c)
-                    .filter(task => task.$.id === filteredRelations[0].task[0].$.idref);
-
+                    .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
+      
                 // TODO: Same as above, this logic is dumb.
                 filteredTasks = filteredTasks.filter((task, index, self) =>
                     index === self.findIndex((r) => (
@@ -159,6 +179,18 @@ const mergeFiles = () => {
                 });
 
                 filteredTasks.forEach(task => {
+                    // Store this task in our database if it's not in there already.
+                    const taskId = task.$.id;
+                    const pushed = conf.get('pushed');
+
+                    // Already emailed, don't email again!
+                    if (pushed.indexOf(taskId) !== -1) {
+                        return;
+                    }
+
+                    pushed.push(task.$.id);
+                    conf.set({ pushed });
+
                     email
                         .send({
                             template: 'oftask',
@@ -178,6 +210,8 @@ const mergeFiles = () => {
                 });
             })
     });
+
+    return new Promise(handler);
 };
 
 function flattenDeep(arr1) {
@@ -192,3 +226,26 @@ const asyncMkdirp = path => new Promise((resolve, reject) => {
         else resolve();
     });
 });
+
+const decryptOmniFocusDatabase = (inputPath, outputPath, passphrase) => {
+    return new Promise((resolve, reject) => {
+        let options = {
+            args: ['-p', passphrase, '-o', outputPath, inputPath]
+          };
+           
+          PythonShell.run('bin/decrypt.py', options, (err, results) => {
+            // if (err) console.log(err);
+            return resolve(results);
+          });
+    });
+};
+
+const unzipRecursivelyInPlace = (path) => {
+    return new Promise((resolve, reject) => {
+        exec(`./bin/extract.sh ${path}/`,
+        (err, stdout, stderr) => {
+            if (err) reject(err);
+            resolve(stdout)
+        });
+    });
+};

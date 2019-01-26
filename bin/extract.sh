@@ -1,2 +1,2 @@
 #!/bin/bash
-find . -name '*.zip' -exec sh -c 'unzip -d "${1%.*}" "$1"' _ {} \;
+find $1 -name '*.zip' -exec sh -c 'unzip -d "${1%.*}" "$1"' _ {} \;

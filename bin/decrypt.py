@@ -464,15 +464,18 @@ class EncryptedFileHelper (object):
         outfp.write(filehash.finalize()[:self.FileMACLen])
                 
 
-def decrypt_directory(indir, outdir, re_encrypt=False):
+def decrypt_directory(indir, outdir, re_encrypt=False, passphrase=False):
     '''Decrypt the OmniFocus data in indir, writing the result to outdir. Prompts for a passphrase.'''
+    userPassphrase = passphrase
+    if not userPassphrase:
+        userPassphrase = getpass.getpass(prompt="Passphrase: ")
     files = posix.listdir(indir)
     if metadata_filename not in files:
         raise EnvironmentError('Expected to find %r in %r' %
                                ( metadata_filename, indir))
     encryptionMetadata = DocumentKey.parse_metadata( open(os.path.join(indir, metadata_filename), 'rb') )
     metadataKey = DocumentKey.use_passphrase( encryptionMetadata,
-                                              getpass.getpass(prompt="Passphrase: ") )
+                                              userPassphrase )
     docKey = DocumentKey( encryptionMetadata.get('key').data, unwrapping_key=metadataKey )
     for secret in docKey.secrets:
         secret.print()
@@ -560,7 +563,9 @@ if __name__ == '__main__':
                       help='The encryted OmniFocus database to read')
     optp.add_argument('-o', '--output',
                       help='Write decrypted contents to this directory')
+    optp.add_argument('-p', '--passphrase',
+                      help='Pass the passphrase')
     optp.add_argument('-e', '--encrypt', action='store_true',
                       help='Also re-encrypt the resulting directory')    
     args = optp.parse_args()
-    decrypt_directory(args.input, args.output, args.encrypt)
+    decrypt_directory(args.input, args.output, args.encrypt, args.passphrase)

@@ -52,7 +52,7 @@ module.exports = {
   ch.setOpt(Curl.option.PASSWORD, password);
 
   ch.setOpt(Curl.option.WRITEFUNCTION, (buff, nmemb, size) => {
-    fs.writeSync(fileOut, buff, 0, nmemb * size);
+    return fs.writeSync(fileOut, buff, 0, nmemb * size);
   });
 
   ch.on('end', (statusCode, body, headers) => {
