@@ -53,6 +53,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
                     } else {
                         const task = new Promise(resolve => {
                             console.log(`Downloading ${path + link}...`);
+                            // TODO: Need to make the output dir configurable.
                             download(buildURL(link), username, password, `OmniFocus.ofocus/${path + link}`)
                               .then(resolve)
                               .catch(err => console.log);
@@ -204,7 +205,10 @@ const mergeFiles = (path) => {
                                 name: 'Jason',
                                 task: task.name[0],
                                 details: {
+                                    // TODO Format these dates.
+                                    "Added": task.added['0'] !== '' ? task.added[0] : "none",
                                     "Due Date": task.due['0'] !== '' ? task.due[0] : "none",
+                                    // TODO: Add additional details like tags, and estimated duration.
                                 },
                             },
                         })
