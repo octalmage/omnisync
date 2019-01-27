@@ -13,7 +13,6 @@ const mkdirp = require('mkdirp');
 const pkg = require('./package.json');
 const { PythonShell } = require('python-shell')
 const exec = require('child_process').exec;
-
 const update = require('immutability-helper').default;
 
 const conf = new Configstore(pkg.name, { pushed: [] });
@@ -32,7 +31,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
             const $ = cheerio.load(body);
             // console.log($('a', 'table').map((i, elem) => $(elem).attr('href')));
-            // Search for a inside of table (yup it's backwards).
+            // Search for an "a" inside of table (yup it's backwards).
             const tasks = [asyncMkdirp('OmniFocus.ofocus')];
             $('a', 'table').each((i, elem) => {
                 const link = $(elem).attr('href');
@@ -72,7 +71,7 @@ downloadDirectoryRecursively('', users[0].username, users[0].password)
 // Promise.resolve()
     .then(() => {
         const outPath = `${Date.now()}.OmniFocus.ofocus`;
-        // return '1548392924284.OmniFocus.ofocus';
+        // return '1548549935175.OmniFocus.ofocus';
         return decryptOmniFocusDatabase('OmniFocus.ofocus', outPath, users[0].password)
         .then(() => outPath);
     })
@@ -87,7 +86,6 @@ downloadDirectoryRecursively('', users[0].username, users[0].password)
         console.log("All done!");
     })
     .catch(console.err)
-
 
 const mergeFiles = (path) => {
     const handler = (resolve, reject) => glob(`${path}/**/*.xml`, {}, (er, files) => {
@@ -106,7 +104,7 @@ const mergeFiles = (path) => {
                     return console.error("Error reading xml files.");
                 }
                 const tasks = [];
-                const contexts = [];
+                let contexts = [];
                 const relations = [];
                 results.forEach(xml => {
                     parseString(xml, (err, result) => {
@@ -121,21 +119,37 @@ const mergeFiles = (path) => {
                     });
                 });
 
+                contexts = flattenDeep(contexts);
+   
                 // Grab tags that match our users.
-                const filteredContexts = flattenDeep(contexts)
-                    .filter(c => c) // Remove empty items;
-                    .map(context => {
-                        if (context.name) {
-                            context.name = context.name[0];
-                            return context;
+                let filteredParentContexts = findTasksWithValueForKey(contexts, 'name', 'People');
+                filteredParentContexts = applyUpdates(filteredParentContexts, (c) => c.$.id);
+         
+                if (filteredParentContexts.length > 1) {
+                    console.log('WARNING: Extra parent tag found.');
+                    console.log(filteredParentContexts);
+                }
+
+                const parentContext = filteredParentContexts[0];
+                const filteredContexts = contexts.filter(
+                    context => {
+                        if (
+                            context &&
+                            typeof context.context !== 'undefined' && 
+                            typeof context.context[0] === 'object'
+                        ) {
+                            if (context.context[0].$.idref === parentContext.$.id) {
+                                return true;
+                            }
+                            return false;
                         }
-                    })
-                    .filter(c => c) // Remove empty items again!
-                    .filter(context => context.name === 'Taryn');
+                       return false;
+                    }
+                );
 
-                // TODO: Instead of grabbing first user, we need to do this for all.
-                const tag = filteredContexts[0];
-
+                // TODO: Instead of grabbing first user, we need to do this for users that have maildrop addresses.
+                const tag = findTasksWithValueForKey(filteredContexts, 'name', 'Taryn')[0];
+        
                 // Find the tasks with the above tag.
                 let filteredRelations = flattenDeep(relations)
                     .filter(c => c)
@@ -146,50 +160,14 @@ const mergeFiles = (path) => {
                     })
                     .filter(c => c) // Remove empty items again!
                     .filter(relation => relation.context[0].$.idref === tag.$.id);
-
-                // Remove duplicates.
-                // TODO: These aren't duplicates, they're transactions. So we might need to make this logic smarter.
-        
-                // filteredRelations = filteredRelations.filter((relation, index, self) =>
-                //     index === self.findIndex((r) => (
-                //         r.$.id === relation.$.id
-                //     ))
-                // );
-
+                
+                // TODO: Do we need to applyTransactions here?
 
                 // Now find the tasks referenced in the relations.
                 let filteredTasks = flattenDeep(tasks)
                     .filter(c => c)
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
       
-                // TODO: Same as above, this logic is dumb.
-                // filteredTasks = filteredTasks.filter((task, index, self) =>
-                //     index === self.findIndex((r) => (
-                //         r.$.id === task.$.id
-                //     ))
-                // );
-                
-                // Apply transactions.
-                const taskTable = {};
-                filteredTasks.forEach(task => {
-                    if (typeof taskTable[task.$.id] === 'undefined') {
-                        taskTable[task.$.id] = task;
-                        return;
-                    } 
-                    /**
-                     * Format: 
-                     *   { '$': { id: 'ijrr10Cv7N5', op: 'update' },
-                     *   added: [ '2018-12-27T18:02:52.189Z' ],
-                     *   modified: [ '2019-01-25T13:11:23.086Z' ],
-                     *   due: [ '2019-01-26T23:00:00.000Z' ] }
-                     */
-                    const currentTask = taskTable[task.$.id];
-                    const transactionTask = update(currentTask, { $unset: ['$', 'added'] });
-
-                    // Apply the transaction.
-                    taskTable[task.$.id] = update(currentTask, { $merge: transactionTask });
-                });
-
                 const email = new Email({
                     message: {
                         // TODO: Make this configurable.
@@ -200,7 +178,8 @@ const mergeFiles = (path) => {
                     transport: config.get('transport'),
                 });
 
-                Object.values(taskTable).forEach(task => {
+                const finalTasks = applyUpdates(filteredTasks, (t) => t.$.id);
+                finalTasks.forEach(task => {
                     // Store this task in our database if it's not in there already.
                     const taskId = task.$.id;
                     const pushed = conf.get('pushed');
@@ -238,11 +217,48 @@ const mergeFiles = (path) => {
     return new Promise(handler);
 };
 
+const findTasksWithValueForKey = (tasks, key, value) => tasks
+    .filter(c => c) // Remove empty items;
+    .map(context => {
+        if (context[key]) {
+            // console.log(context.name);
+            // console.log(context.$.id);
+            // console.log(context.context.$.idref);
+            return context;
+        }
+    })
+    .filter(c => c) // Remove empty items again!
+    .filter(context => context[key][0] === value);
+
+
+const applyUpdates = (tasks, getID) => {
+    const taskTable = {};
+    tasks.forEach(task => {
+        const id = getID(task);
+        if (typeof taskTable[id] === 'undefined') {
+            taskTable[id] = task;
+            return;
+        } 
+        /**
+         * Format: 
+         *   { '$': { id: 'ijrr10Cv7N5', op: 'update' },
+         *   added: [ '2018-12-27T18:02:52.189Z' ],
+         *   modified: [ '2019-01-25T13:11:23.086Z' ],
+         *   due: [ '2019-01-26T23:00:00.000Z' ] }
+         */
+        const currentTask = taskTable[id];
+        const transactionTask = update(currentTask, { $unset: ['$', 'added'] });
+
+        // Apply the transaction.
+        taskTable[id] = update(currentTask, { $merge: transactionTask });
+    });
+
+    return Object.values(taskTable);
+};
+
 function flattenDeep(arr1) {
     return arr1.reduce((acc, val) => Array.isArray(val) ? acc.concat(flattenDeep(val)) : acc.concat(val), []);
 }
-
-// mergeFiles();
 
 const asyncMkdirp = path => new Promise((resolve, reject) => {
     mkdirp(path, function (err) {
