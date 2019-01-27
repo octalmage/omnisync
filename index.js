@@ -14,6 +14,7 @@ const pkg = require('./package.json');
 const { PythonShell } = require('python-shell')
 const exec = require('child_process').exec;
 
+const update = require('immutability-helper').default;
 
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
@@ -162,11 +163,32 @@ const mergeFiles = (path) => {
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
       
                 // TODO: Same as above, this logic is dumb.
-                filteredTasks = filteredTasks.filter((task, index, self) =>
-                    index === self.findIndex((r) => (
-                        r.$.id === task.$.id
-                    ))
-                );
+                // filteredTasks = filteredTasks.filter((task, index, self) =>
+                //     index === self.findIndex((r) => (
+                //         r.$.id === task.$.id
+                //     ))
+                // );
+                
+                // Apply transactions.
+                const taskTable = {};
+                filteredTasks.forEach(task => {
+                    if (typeof taskTable[task.$.id] === 'undefined') {
+                        taskTable[task.$.id] = task;
+                        return;
+                    } 
+                    /**
+                     * Format: 
+                     *   { '$': { id: 'ijrr10Cv7N5', op: 'update' },
+                     *   added: [ '2018-12-27T18:02:52.189Z' ],
+                     *   modified: [ '2019-01-25T13:11:23.086Z' ],
+                     *   due: [ '2019-01-26T23:00:00.000Z' ] }
+                     */
+                    const currentTask = taskTable[task.$.id];
+                    const transactionTask = update(currentTask, { $unset: ['$', 'added'] });
+
+                    // Apply the transaction.
+                    taskTable[task.$.id] = update(currentTask, { $merge: transactionTask });
+                });
 
                 const email = new Email({
                     message: {
@@ -178,13 +200,15 @@ const mergeFiles = (path) => {
                     transport: config.get('transport'),
                 });
 
-                filteredTasks.forEach(task => {
+                Object.values(taskTable).forEach(task => {
                     // Store this task in our database if it's not in there already.
                     const taskId = task.$.id;
                     const pushed = conf.get('pushed');
+                    console.log(`Found task: ${task.name}`);
 
                     // Already emailed, don't email again!
                     if (pushed.indexOf(taskId) !== -1) {
+                        console.log('Already synced, skipping');
                         return;
                     }
 
