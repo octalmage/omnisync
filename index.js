@@ -14,6 +14,7 @@ const pkg = require('./package.json');
 const { PythonShell } = require('python-shell')
 const exec = require('child_process').exec;
 const update = require('immutability-helper').default;
+const merge = require('deepmerge');
 
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
@@ -110,7 +111,6 @@ const mergeFiles = (path) => {
                     parseString(xml, (err, result) => {
                         if (err || !result) return;
                         // Grab each task.
-                        // console.log(result);
                         tasks.push(result.omnifocus.task);
                         // Grab tags.
                         contexts.push(result.omnifocus.context);
@@ -177,7 +177,7 @@ const mergeFiles = (path) => {
                     // send: true,
                     transport: config.get('transport'),
                 });
-
+ 
                 const finalTasks = applyUpdates(filteredTasks, (t) => t.$.id);
                 finalTasks.forEach(task => {
                     // Store this task in our database if it's not in there already.
@@ -231,14 +231,34 @@ const findTasksWithValueForKey = (tasks, key, value) => tasks
     .filter(context => context[key][0] === value);
 
 
+const overwriteMerge = (destinationArray, sourceArray, options) => sourceArray;
 const applyUpdates = (tasks, getID) => {
+    const isTransaction = task => typeof task.$.op !== 'undefined';
+
+    // Sort tasks so transactions are at the bottom.
+    tasks.sort((a, b) => {
+        if (isTransaction(a) && isTransaction(b)) {
+            return 0;
+        } else if (isTransaction(a) && !isTransaction(b)) {
+            return 1
+        } else {
+            return -1;
+        }
+    });
+
     const taskTable = {};
     tasks.forEach(task => {
         const id = getID(task);
-        if (typeof taskTable[id] === 'undefined') {
+        if (typeof taskTable[id] === 'undefined' && typeof task.$.op === 'undefined') {
             taskTable[id] = task;
             return;
-        } 
+        }
+
+        // Skipping non-transactions.
+        if (typeof task.$.op === 'undefined') {
+            return;
+        }
+
         /**
          * Format: 
          *   { '$': { id: 'ijrr10Cv7N5', op: 'update' },
@@ -247,10 +267,9 @@ const applyUpdates = (tasks, getID) => {
          *   due: [ '2019-01-26T23:00:00.000Z' ] }
          */
         const currentTask = taskTable[id];
-        const transactionTask = update(currentTask, { $unset: ['$', 'added'] });
-
+        const transactionTask = update(task, { $unset: ['$', 'added'] });
         // Apply the transaction.
-        taskTable[id] = update(currentTask, { $merge: transactionTask });
+        taskTable[id] = merge(currentTask, transactionTask, { arrayMerge: overwriteMerge });
     });
 
     return Object.values(taskTable);
