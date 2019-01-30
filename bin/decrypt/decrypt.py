@@ -125,7 +125,7 @@ and how to create a decryptor for a file using the unwrapped document keys.
             metadata = metadata[0]
         assert isinstance(metadata, dict)
         return metadata
-        
+
     @classmethod
     def use_passphrase(self, metadata, passphrase):
         '''Use a passphrase to derive the key which unwraps the blob of file keys.'''
@@ -151,7 +151,7 @@ and how to create a decryptor for a file using the unwrapped document keys.
             backend    = backend
         )
         return deriver.derive(passphrase_bytes)
-        
+
     def __init__(self, secrets=None, unwrapping_key=None):
         self.secrets = None
         if secrets:
@@ -191,14 +191,14 @@ and how to create a decryptor for a file using the unwrapped document keys.
         if fragment > 0:
             buf.write( b'\x00' * (8 - fragment) )
         marshalled = buf.getvalue()
-            
+
         if wrapping_key is None:
             return marshalled
         else:
             return primitives.keywrap.aes_key_wrap(wrapping_key,
                                                    marshalled,
                                                    backend)
-    
+
     def get_decryptor(self, info):
         '''Return an object which decrypts a file, given that file's key information. Used by decrypt_file().'''
         # The beginning of the key information is the key identifier.
@@ -226,7 +226,7 @@ and how to create a decryptor for a file using the unwrapped document keys.
             slotnum = random.randint(0, 2 + (2 * len(used_slots)))
             if slotnum not in used_slots:
                 return slotnum
-        
+
     def get_key_of_type(self, keytype, create=False):
         tp = SlotType[keytype]
         for slot in self.secrets:
@@ -258,7 +258,7 @@ and how to create a decryptor for a file using the unwrapped document keys.
         newDocKey = DocumentKey()
         newDocKey.secrets = new_secrets
         return newDocKey
-        
+
     def applicable_policy_slots(self, filename):
         '''Return any filename-based-policy slots which apply to this filename.'''
         fnbytes = filename.encode('utf8')
@@ -383,7 +383,7 @@ class EncryptedFileHelper (object):
             fp.seek(startpos)
             segmentIV = fp.read(self.SegIVLen)
             segmentMAC = fp.read(self.SegMACLen)
-            
+
             # Verify the segment's own MAC against the segment data
             segmenthash = HMAC(self.hmackey, primitives.hashes.SHA256(), backend)
             segmenthash.update(segmentIV)
@@ -440,7 +440,7 @@ class EncryptedFileHelper (object):
             mode = modes.CTR(segmentIV + b'\x00\x00\x00\x00')
             encryptor = Cipher(aes, mode, backend=backend).encryptor()
             seghash = HMAC(self.hmackey, primitives.hashes.SHA256(), backend)
-            
+
             seghash.update(segmentIV)
             outfp.write(segmentIV)
 
@@ -456,13 +456,13 @@ class EncryptedFileHelper (object):
             segmentMAC = seghash.finalize()[:self.SegMACLen]
             outfp.write(segmentMAC)
             filehash.update(segmentMAC)
-            
+
             outfp.write(encryptedData)
 
             segmentIndex += 1
 
         outfp.write(filehash.finalize()[:self.FileMACLen])
-                
+
 
 def decrypt_directory(indir, outdir, re_encrypt=False, passphrase=False):
     '''Decrypt the OmniFocus data in indir, writing the result to outdir. Prompts for a passphrase.'''
@@ -479,7 +479,7 @@ def decrypt_directory(indir, outdir, re_encrypt=False, passphrase=False):
     docKey = DocumentKey( encryptionMetadata.get('key').data, unwrapping_key=metadataKey )
     for secret in docKey.secrets:
         secret.print()
-    
+
     workdir = outdir
     if outdir is not None:
         posix.mkdir(outdir)
@@ -501,13 +501,9 @@ def decrypt_directory(indir, outdir, re_encrypt=False, passphrase=False):
                     os.makedirs(os.path.split(outpath)[0])
                 with open(os.path.join(inpath), "rb") as infp, \
                      open(os.path.join(outpath), "wb") as outfp:
-                    print(inpath)
-                    print(outpath)
                     docKey.decrypt_file(datafile, infp, outfp)
             else:
                 print('Reading %r' % (display,))
-                print(indir)
-                print(inpath)
                 with open(os.path.join(inpath), "rb") as infp:
                     docKey.decrypt_file(datafile, infp, None)
 
@@ -517,7 +513,7 @@ def decrypt_directory(indir, outdir, re_encrypt=False, passphrase=False):
         newKey = docKey.get_key_of_type(ActiveAES_CTR_HMAC, True)
         encryptionMetadata['key'] = plistlib.Data(docKey.wrapped_secrets(metadataKey))
         encrypt_directory(encryptionMetadata, docKey, workdir, outdir)
-        
+
         # We've created a tempdirectory lets clean it up
         import shutil
         shutil.rmtree(workdir)
@@ -555,8 +551,8 @@ def encrypt_directory(metadata, docKey, indir, outdir):
                  open(outpath, "wb") as outfp:
 
                 docKey.encrypt_file(datafile, infp, outfp)
-    
-                
+
+
 if __name__ == '__main__':
     optp = argparse.ArgumentParser()
     optp.add_argument('input', metavar='input.ofocus',
@@ -566,6 +562,6 @@ if __name__ == '__main__':
     optp.add_argument('-p', '--passphrase',
                       help='Pass the passphrase')
     optp.add_argument('-e', '--encrypt', action='store_true',
-                      help='Also re-encrypt the resulting directory')    
+                      help='Also re-encrypt the resulting directory')
     args = optp.parse_args()
     decrypt_directory(args.input, args.output, args.encrypt, args.passphrase)

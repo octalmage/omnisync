@@ -121,11 +121,11 @@ const mergeFiles = (path) => {
                 });
 
                 contexts = flattenDeep(contexts);
-   
+
                 // Grab tags that match our users.
                 let filteredParentContexts = findTasksWithValueForKey(contexts, 'name', 'People');
                 filteredParentContexts = applyUpdates(filteredParentContexts, (c) => c.$.id);
-         
+
                 if (filteredParentContexts.length > 1) {
                     console.log('WARNING: Extra parent tag found.');
                     console.log(filteredParentContexts);
@@ -136,7 +136,7 @@ const mergeFiles = (path) => {
                     context => {
                         if (
                             context &&
-                            typeof context.context !== 'undefined' && 
+                            typeof context.context !== 'undefined' &&
                             typeof context.context[0] === 'object'
                         ) {
                             if (context.context[0].$.idref === parentContext.$.id) {
@@ -150,7 +150,7 @@ const mergeFiles = (path) => {
 
                 // TODO: Instead of grabbing first user, we need to do this for users that have maildrop addresses.
                 const tag = findTasksWithValueForKey(filteredContexts, 'name', 'Taryn')[0];
-        
+
                 // Find the tasks with the above tag.
                 let filteredRelations = flattenDeep(relations)
                     .filter(c => c)
@@ -161,24 +161,24 @@ const mergeFiles = (path) => {
                     })
                     .filter(c => c) // Remove empty items again!
                     .filter(relation => relation.context[0].$.idref === tag.$.id);
-                
+
                 // TODO: Do we need to applyTransactions here?
 
                 // Now find the tasks referenced in the relations.
                 let filteredTasks = flattenDeep(tasks)
                     .filter(c => c)
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
-      
+
                 const email = new Email({
                     message: {
                         // TODO: Make this configurable.
-                        from: 'jacerox1234@gmail.com'
+                        from: config.get('email').fromAddress
                     },
                     // Umcomment to send in development.
                     // send: true,
-                    transport: config.get('transport'),
+                    transport: config.get('email').transport,
                 });
- 
+
                 const finalTasks = applyUpdates(filteredTasks, (t) => t.$.id);
                 finalTasks.forEach(task => {
                     // Store this task in our database if it's not in there already.
@@ -225,9 +225,6 @@ const findTasksWithValueForKey = (tasks, key, value) => tasks
     .filter(c => c) // Remove empty items;
     .map(context => {
         if (context[key]) {
-            // console.log(context.name);
-            // console.log(context.$.id);
-            // console.log(context.context.$.idref);
             return context;
         }
     })
@@ -264,7 +261,7 @@ const applyUpdates = (tasks, getID) => {
         }
 
         /**
-         * Format: 
+         * Format:
          *   { '$': { id: 'ijrr10Cv7N5', op: 'update' },
          *   added: [ '2018-12-27T18:02:52.189Z' ],
          *   modified: [ '2019-01-25T13:11:23.086Z' ],
@@ -295,8 +292,8 @@ const decryptOmniFocusDatabase = (inputPath, outputPath, passphrase) => {
         let options = {
             args: ['-p', passphrase, '-o', outputPath, inputPath]
           };
-           
-          PythonShell.run('bin/decrypt.py', options, (err, results) => {
+
+          PythonShell.run('bin/decrypt/decrypt.py', options, (err, results) => {
             // if (err) console.log(err);
             return resolve(results);
           });
