@@ -15,6 +15,7 @@ const { PythonShell } = require('python-shell')
 const exec = require('child_process').exec;
 const update = require('immutability-helper').default;
 const merge = require('deepmerge');
+const dayjs = require('dayjs');
 
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
@@ -124,7 +125,7 @@ const mergeFiles = (path) => {
 
                 // Grab tags that match our users.
                 let filteredParentContexts = findTasksWithValueForKey(contexts, 'name', 'People');
-                filteredParentContexts = applyUpdates(filteredParentContexts, (c) => c.$.id);
+                filteredParentContexts = applyUpdates(filteredParentContexts, c => c.$.id);
 
                 if (filteredParentContexts.length > 1) {
                     console.log('WARNING: Extra parent tag found.');
@@ -167,6 +168,10 @@ const mergeFiles = (path) => {
                 // Now find the tasks referenced in the relations.
                 let filteredTasks = flattenDeep(tasks)
                     .filter(c => c)
+                    // TODO: Double check this logic.
+                    // Filter out completed tasks.
+                    .filter(t => typeof t.completed !== 'undefined')
+                    .filter(t => t.completed['0'] === '')
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
 
                 const email = new Email({
@@ -179,21 +184,18 @@ const mergeFiles = (path) => {
                     transport: config.get('email').transport,
                 });
 
-                const finalTasks = applyUpdates(filteredTasks, (t) => t.$.id);
+                const finalTasks = applyUpdates(filteredTasks, t => t.$.id);
                 finalTasks.forEach(task => {
                     // Store this task in our database if it's not in there already.
                     const taskId = task.$.id;
                     const pushed = conf.get('pushed');
-                    console.log(`Found task: ${task.name}`);
+                    console.log(`Found task: ${task.name} (${task.$.id})`);
 
                     // Already emailed, don't email again!
                     if (pushed.indexOf(taskId) !== -1) {
-                        console.log('Already synced, skipping');
+                        console.log('↳ Already synced, skipping');
                         return;
                     }
-
-                    pushed.push(task.$.id);
-                    conf.set({ pushed });
 
                     email
                         .send({
@@ -206,13 +208,20 @@ const mergeFiles = (path) => {
                                 task: task.name[0],
                                 details: {
                                     // TODO Format these dates.
-                                    "Added": task.added['0'] !== '' ? task.added[0] : "none",
-                                    "Due Date": task.due['0'] !== '' ? task.due[0] : "none",
-                                    // TODO: Add additional details like tags, and estimated duration.
+                                    "Added": formatDate(gets(task, 'added')),
+                                    "Due Date": formatDate(gets(task, 'due')),
+                                    "Notes": gets(task, 'note'),
+                                    "Estimated Duration": gets(task, 'estimated-minutes'),
+                                    // TODO: Add additional details like tags.
                                 },
                             },
                         })
-                        .then(console.log)
+                        .then(results => {
+                          console.log("↳ Email sent!");
+                          // Save task ID to pushed table.
+                          pushed.push(task.$.id);
+                          conf.set({ pushed });
+                        })
                         .catch(console.error);
                 });
             })
@@ -220,6 +229,13 @@ const mergeFiles = (path) => {
 
     return new Promise(handler);
 };
+
+const formatDate = input => dayjs(input).format('M/DD/YYYY h:mma');
+
+// In OmniFocus everything is an array, so we have to use this helper to extract single values.
+const gets = (task, key, defaultValue = 'none') => (
+  (task[key]['0'] !== '') ? task[key][0] : defaultValue
+);
 
 const findTasksWithValueForKey = (tasks, key, value) => tasks
     .filter(c => c) // Remove empty items;

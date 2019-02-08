@@ -12,6 +12,7 @@
     "cheerio": "^1.0.0-rc.2",
     "config": "^3.0.1",
     "configstore": "^4.0.0",
+    "dayjs": "^1.8.2",
     "deepmerge": "^3.1.0",
     "dotenv": "^6.2.0",
     "email-templates": "^5.0.3",

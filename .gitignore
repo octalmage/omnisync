@@ -1,7 +1,7 @@
 node_modules
 .vscode
 .env
-OmniFocus.ofocus
+*.ofocus
 output
 config
 .DS_Store
