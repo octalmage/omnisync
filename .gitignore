@@ -5,3 +5,4 @@ node_modules
 output
 config
 .DS_Store
+.gitsecret/keys/random_seed
