@@ -3,6 +3,6 @@ node_modules
 .env
 *.ofocus
 output
-config
+config/default.js
 .DS_Store
 .gitsecret/keys/random_seed
