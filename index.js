@@ -197,6 +197,8 @@ const mergeFiles = (path) => {
                         return;
                     }
 
+                    console.log("↳ Email sent!");
+
                     email
                         .send({
                             template: 'oftask',
@@ -217,7 +219,6 @@ const mergeFiles = (path) => {
                             },
                         })
                         .then(results => {
-                          console.log("↳ Email sent!");
                           // Save task ID to pushed table.
                           pushed.push(task.$.id);
                           conf.set({ pushed });
