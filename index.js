@@ -16,12 +16,12 @@ const exec = require('child_process').exec;
 const update = require('immutability-helper').default;
 const merge = require('deepmerge');
 const dayjs = require('dayjs');
-
+const rmdir = require('rimraf');
 const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
 
 const fileWhitelist = [/.zip$/, /.capability/, /encrypted/, /.client$/, /data\//];
-
+const outDir = '/tmp/';
 const downloadDirectoryRecursively = (path, username, password) => {
     const buildURL = (p) => `https://sync1.omnigroup.com/${username}/OmniFocus.ofocus/${p ? p : ''}`;
 
@@ -34,7 +34,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
             const $ = cheerio.load(body);
             // console.log($('a', 'table').map((i, elem) => $(elem).attr('href')));
             // Search for an "a" inside of table (yup it's backwards).
-            const tasks = [asyncMkdirp('OmniFocus.ofocus')];
+            const tasks = [asyncMkdirp(outDir + 'OmniFocus.ofocus')];
             $('a', 'table').each((i, elem) => {
                 const link = $(elem).attr('href');
 
@@ -49,13 +49,13 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
                 if (shouldDownload) {
                     if (link[link.length - 1] === '/') {
-                        tasks.push(asyncMkdirp(`OmniFocus.ofocus/${link}`));
+                        tasks.push(asyncMkdirp(`${outDir}OmniFocus.ofocus/${link}`));
                         tasks.push(downloadDirectoryRecursively(link, username, password));
                     } else {
                         const task = new Promise(resolve => {
                             console.log(`Downloading ${path + link}...`);
                             // TODO: Need to make the output dir configurable.
-                            download(buildURL(link), username, password, `OmniFocus.ofocus/${path + link}`)
+                            download(buildURL(link), username, password, `${outDir}OmniFocus.ofocus/${path + link}`)
                               .then(resolve)
                               .catch(err => console.log);
                         });
@@ -73,9 +73,9 @@ console.log("Downloading database...");
 downloadDirectoryRecursively('', users[0].username, users[0].password)
 // Promise.resolve()
     .then(() => {
-        const outPath = `${Date.now()}.OmniFocus.ofocus`;
+        const outPath = `${outDir}${Date.now()}.OmniFocus.ofocus`;
         // return '1548549935175.OmniFocus.ofocus';
-        return decryptOmniFocusDatabase('OmniFocus.ofocus', outPath, users[0].password)
+        return decryptOmniFocusDatabase(outDir + 'OmniFocus.ofocus', outPath, users[0].password)
         .then(() => outPath);
     })
     .then((outPath) => {
@@ -85,10 +85,11 @@ downloadDirectoryRecursively('', users[0].username, users[0].password)
         .then(() => outPath);
     })
     .then((outPath) => mergeFiles(outPath))
-    .then(() => {
-        console.log("All done!");
-    })
-    .catch(console.err)
+    .then(() => rmRecursively(outPath)
+    		.then(() => rmRecursively(outDir + 'OmniFocus.ofocus'))
+    )
+    .then(() => console.log('All done!'))
+    .catch(console.err);
 
 const mergeFiles = (path) => {
     const handler = (resolve, reject) => glob(`${path}/**/*.xml`, {}, (er, files) => {
@@ -325,4 +326,10 @@ const unzipRecursivelyInPlace = (path) => {
             resolve(stdout)
         });
     });
+};
+
+const rmRecursively = (path) => {
+	return new Promise((resolve) => {
+			rmdir(path, resolve);
+	});	
 };
