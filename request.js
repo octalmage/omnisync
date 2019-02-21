@@ -41,7 +41,7 @@ module.exports = {
 
     ch.setOpt('URL', url);
 
-    ch.setOpt(Curl.option.CONNECTTIMEOUT, 60);
+    ch.setOpt(Curl.option.CONNECTTIMEOUT, 120);
     ch.setOpt(Curl.option.FOLLOWLOCATION, true);
 
     ch.setOpt(Curl.option.HTTPAUTH, Curl.auth.DIGEST);
@@ -73,5 +73,4 @@ module.exports = {
 
     return;
   }),
-
 }

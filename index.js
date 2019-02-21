@@ -84,12 +84,12 @@ downloadDirectoryRecursively('', users[0].username, users[0].password)
             .then((output) => console.log(output))
             .then(() => outPath);
     })
-    .then((outPath) => mergeFiles(outPath))
+    .then((outPath) => mergeFiles(outPath)
+        .then(() => rmRecursively(outPath)
+            .then(() => rmRecursively(outDir + '/OmniFocus.ofocus'))
+        ))
     .then(() => console.log('All done!'))
-    .catch(console.err)
-    .then(() => rmRecursively(outPath)
-        .then(() => rmRecursively(outDir + '/OmniFocus.ofocus'))
-    );
+    .catch(console.err);
 
 const mergeFiles = (path) => {
     const handler = (resolve, reject) => glob(`${path}/**/*.xml`, {}, (er, files) => {
@@ -171,8 +171,8 @@ const mergeFiles = (path) => {
                     .filter(c => c)
                     // TODO: Double check this logic.
                     // Filter out completed tasks.
-                    // .filter(t => typeof t.completed !== 'undefined')
-                    // .filter(t => t.completed['0'] === '')
+                    .filter(t => typeof t.completed !== 'undefined')
+                    .filter(t => t.completed['0'] === '')
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
 
                 const email = new Email({
@@ -186,6 +186,7 @@ const mergeFiles = (path) => {
                 });
 
                 const finalTasks = applyUpdates(filteredTasks, t => t.$.id);
+                const emailToSend = [];
                 finalTasks.forEach(task => {
                     // Store this task in our database if it's not in there already.
                     const taskId = task.$.id;
@@ -200,32 +201,39 @@ const mergeFiles = (path) => {
 
                     console.log("↳ Email sent!");
 
-                    email
-                        .send({
-                            template: 'oftask',
-                            message: {
-                                to: users[1].maildrop,
-                            },
-                            locals: {
-                                name: 'Jason',
-                                task: task.name[0],
-                                details: {
-                                    // TODO Format these dates.
-                                    "Added": formatDate(gets(task, 'added')),
-                                    "Due Date": formatDate(gets(task, 'due')),
-                                    "Notes": gets(task, 'note'),
-                                    "Estimated Duration": gets(task, 'estimated-minutes'),
-                                    // TODO: Add additional details like tags.
+                    const newEmail = new Promise(resolve => {
+                        email
+                            .send({
+                                template: 'oftask',
+                                message: {
+                                    to: users[1].maildrop,
                                 },
-                            },
-                        })
-                        .then(results => {
-                            // Save task ID to pushed table.
-                            pushed.push(task.$.id);
-                            conf.set({ pushed });
-                        })
-                        .catch(console.error);
+                                locals: {
+                                    name: 'Jason',
+                                    task: task.name[0],
+                                    details: {
+                                        // TODO Format these dates.
+                                        "Added": formatDate(gets(task, 'added')),
+                                        "Due Date": formatDate(gets(task, 'due')),
+                                        "Notes": gets(task, 'note'),
+                                        "Estimated Duration": gets(task, 'estimated-minutes'),
+                                        // TODO: Add additional details like tags.
+                                    },
+                                },
+                            })
+                            .then(results => {
+                                // Save task ID to pushed table.
+                                pushed.push(task.$.id);
+                                conf.set({ pushed });
+                                resolve();
+                            })
+                            .catch(console.error);
+                    });
+
+                    emailToSend.push(newEmail);
                 });
+
+                return Promise.all(emailToSend);
             })
     });
 
@@ -330,6 +338,6 @@ const unzipRecursivelyInPlace = (path) => {
 
 const rmRecursively = (path) => {
     return new Promise((resolve) => {
-        rmdir(path, resolve);
+        rmdir(path + '/**/*', resolve);
     });
 };
