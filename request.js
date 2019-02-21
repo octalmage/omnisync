@@ -18,15 +18,15 @@ module.exports = {
     ch.setOpt(Curl.option.PASSWORD, password);
 
     ch.on('end', (statusCode, body, headers) => {
-        ch.close();
-        return resolve({ statusCode, body, headers, url });
+      ch.close();
+      return resolve({ statusCode, body, headers, url });
     });
 
     ch.on('error', (err, curlErrCode) => {
-        console.error('Err: ', err);
-        console.error('Code: ', curlErrCode);
-        ch.close();
-        return reject(err, curlErrCode);
+      console.error('Err: ', err);
+      console.error('Code: ', curlErrCode);
+      ch.close();
+      return reject(err, curlErrCode);
     });
 
     ch.perform();
@@ -36,43 +36,42 @@ module.exports = {
   }),
 
   download: (url, username, password, destination) => new Promise((resolve, reject) => {
-  const ch = new Curl();
-  const fileOut = fs.openSync(destination, 'w+');
+    const ch = new Curl();
+    const fileOut = fs.openSync(destination, 'w+');
 
-  ch.setOpt('URL', url);
+    ch.setOpt('URL', url);
 
-  ch.setOpt(Curl.option.CONNECTTIMEOUT, 60);
-  ch.setOpt(Curl.option.FOLLOWLOCATION, true);
+    ch.setOpt(Curl.option.CONNECTTIMEOUT, 60);
+    ch.setOpt(Curl.option.FOLLOWLOCATION, true);
 
-  ch.setOpt(Curl.option.HTTPAUTH, Curl.auth.DIGEST);
-  // Uncomment to show more debug information.
-  // ch.setOpt( Curl.option.VERBOSE, true );
+    ch.setOpt(Curl.option.HTTPAUTH, Curl.auth.DIGEST);
+    // Uncomment to show more debug information.
+    // ch.setOpt( Curl.option.VERBOSE, true );
 
-  ch.setOpt(Curl.option.USERNAME, username);
-  ch.setOpt(Curl.option.PASSWORD, password);
+    ch.setOpt(Curl.option.USERNAME, username);
+    ch.setOpt(Curl.option.PASSWORD, password);
 
-  ch.setOpt(Curl.option.WRITEFUNCTION, (buff, nmemb, size) => {
-    return fs.writeSync(fileOut, buff, 0, nmemb * size);
-  });
+    ch.setOpt(Curl.option.WRITEFUNCTION, (buff, nmemb, size) => {
+      return fs.writeSync(fileOut, buff, 0, nmemb * size);
+    });
 
-  ch.on('end', (statusCode, body, headers) => {
+    ch.on('end', (statusCode, body, headers) => {
       ch.close();
       fs.closeSync(fileOut);
       return resolve({ statusCode, body, headers, url });
-  });
+    });
 
-  ch.on('error', (err, curlErrCode) => {
+    ch.on('error', (err, curlErrCode) => {
       console.error('Err: ', err);
       console.error('Code: ', curlErrCode);
       ch.close();
       fs.closeSync(fileOut);
       return reject(err, curlErrCode);
-  });
+    });
 
-  ch.perform();
+    ch.perform();
 
-
-  return;
-}),
+    return;
+  }),
 
 }

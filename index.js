@@ -21,7 +21,7 @@ const conf = new Configstore(pkg.name, { pushed: [] });
 const users = Object.values(config.get('users'));
 
 const fileWhitelist = [/.zip$/, /.capability/, /encrypted/, /.client$/, /data\//];
-const outDir = '/tmp/';
+const outDir = '/tmp';
 const downloadDirectoryRecursively = (path, username, password) => {
     const buildURL = (p) => `https://sync1.omnigroup.com/${username}/OmniFocus.ofocus/${p ? p : ''}`;
 
@@ -34,7 +34,7 @@ const downloadDirectoryRecursively = (path, username, password) => {
             const $ = cheerio.load(body);
             // console.log($('a', 'table').map((i, elem) => $(elem).attr('href')));
             // Search for an "a" inside of table (yup it's backwards).
-            const tasks = [asyncMkdirp(outDir + 'OmniFocus.ofocus')];
+            const tasks = [asyncMkdirp(outDir + '/OmniFocus.ofocus')];
             $('a', 'table').each((i, elem) => {
                 const link = $(elem).attr('href');
 
@@ -49,15 +49,15 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
                 if (shouldDownload) {
                     if (link[link.length - 1] === '/') {
-                        tasks.push(asyncMkdirp(`${outDir}OmniFocus.ofocus/${link}`));
+                        tasks.push(asyncMkdirp(`${outDir}/OmniFocus.ofocus/${link}`));
                         tasks.push(downloadDirectoryRecursively(link, username, password));
                     } else {
                         const task = new Promise(resolve => {
                             console.log(`Downloading ${path + link}...`);
                             // TODO: Need to make the output dir configurable.
-                            download(buildURL(link), username, password, `${outDir}OmniFocus.ofocus/${path + link}`)
-                              .then(resolve)
-                              .catch(err => console.log);
+                            download(buildURL(link), username, password, `${outDir}/OmniFocus.ofocus/${path + link}`)
+                                .then(resolve)
+                                .catch(err => console.log);
                         });
 
                         tasks.push(task);
@@ -71,25 +71,25 @@ const downloadDirectoryRecursively = (path, username, password) => {
 
 console.log("Downloading database...");
 downloadDirectoryRecursively('', users[0].username, users[0].password)
-// Promise.resolve()
+    // Promise.resolve()
     .then(() => {
-        const outPath = `${outDir}${Date.now()}.OmniFocus.ofocus`;
+        const outPath = `${outDir}/${Date.now()}.OmniFocus.ofocus`;
         // return '1548549935175.OmniFocus.ofocus';
-        return decryptOmniFocusDatabase(outDir + 'OmniFocus.ofocus', outPath, users[0].password)
-        .then(() => outPath);
+        return decryptOmniFocusDatabase(outDir + '/OmniFocus.ofocus', outPath, users[0].password)
+            .then(() => outPath);
     })
     .then((outPath) => {
         // return outPath;
         return unzipRecursivelyInPlace(outPath)
-        .then((output) => console.log(output))
-        .then(() => outPath);
+            .then((output) => console.log(output))
+            .then(() => outPath);
     })
     .then((outPath) => mergeFiles(outPath))
-    .then(() => rmRecursively(outPath)
-    		.then(() => rmRecursively(outDir + 'OmniFocus.ofocus'))
-    )
     .then(() => console.log('All done!'))
-    .catch(console.err);
+    .catch(console.err)
+    .then(() => rmRecursively(outPath)
+        .then(() => rmRecursively(outDir + '/OmniFocus.ofocus'))
+    );
 
 const mergeFiles = (path) => {
     const handler = (resolve, reject) => glob(`${path}/**/*.xml`, {}, (er, files) => {
@@ -146,7 +146,7 @@ const mergeFiles = (path) => {
                             }
                             return false;
                         }
-                       return false;
+                        return false;
                     }
                 );
 
@@ -171,8 +171,8 @@ const mergeFiles = (path) => {
                     .filter(c => c)
                     // TODO: Double check this logic.
                     // Filter out completed tasks.
-                    .filter(t => typeof t.completed !== 'undefined')
-                    .filter(t => t.completed['0'] === '')
+                    // .filter(t => typeof t.completed !== 'undefined')
+                    // .filter(t => t.completed['0'] === '')
                     .filter(task => filteredRelations.map(t => t.task[0].$.idref).indexOf(task.$.id) !== -1);
 
                 const email = new Email({
@@ -220,9 +220,9 @@ const mergeFiles = (path) => {
                             },
                         })
                         .then(results => {
-                          // Save task ID to pushed table.
-                          pushed.push(task.$.id);
-                          conf.set({ pushed });
+                            // Save task ID to pushed table.
+                            pushed.push(task.$.id);
+                            conf.set({ pushed });
                         })
                         .catch(console.error);
                 });
@@ -236,7 +236,7 @@ const formatDate = input => dayjs(input).format('M/DD/YYYY h:mma');
 
 // In OmniFocus everything is an array, so we have to use this helper to extract single values.
 const gets = (task, key, defaultValue = 'none') => (
-  (task[key]['0'] !== '') ? task[key][0] : defaultValue
+    (task[key]['0'] !== '') ? task[key][0] : defaultValue
 );
 
 const findTasksWithValueForKey = (tasks, key, value) => tasks
@@ -309,27 +309,27 @@ const decryptOmniFocusDatabase = (inputPath, outputPath, passphrase) => {
     return new Promise((resolve, reject) => {
         let options = {
             args: ['-p', passphrase, '-o', outputPath, inputPath]
-          };
+        };
 
-          PythonShell.run('bin/decrypt/decrypt.py', options, (err, results) => {
+        PythonShell.run('bin/decrypt/decrypt.py', options, (err, results) => {
             // if (err) console.log(err);
             return resolve(results);
-          });
+        });
     });
 };
 
 const unzipRecursivelyInPlace = (path) => {
     return new Promise((resolve, reject) => {
         exec(`./bin/extract.sh ${path}/`,
-        (err, stdout, stderr) => {
-            if (err) reject(err);
-            resolve(stdout)
-        });
+            (err, stdout, stderr) => {
+                if (err) reject(err);
+                resolve(stdout)
+            });
     });
 };
 
 const rmRecursively = (path) => {
-	return new Promise((resolve) => {
-			rmdir(path, resolve);
-	});	
+    return new Promise((resolve) => {
+        rmdir(path, resolve);
+    });
 };
